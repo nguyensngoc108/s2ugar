@@ -18,6 +18,18 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Logging middleware - shows all API requests with status code
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  
+  res.on('finish', () => {
+    const statusCode = res.statusCode;
+    console.log(`[${timestamp}] ${req.method} ${req.path} - Status: ${statusCode}`);
+  });
+  
+  next();
+});
+
 // Connect to Database
 connectDB();
 

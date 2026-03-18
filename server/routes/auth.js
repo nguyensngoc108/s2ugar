@@ -1,15 +1,12 @@
 import express from 'express';
+import { login, register } from '../controllers/authController.js';
 
 const router = express.Router();
 
-// Admin login
-router.post('/login', async (req, res) => {
-  try {
-    // To be implemented
-    res.json({ message: 'Login endpoint' });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+// POST /api/auth/login
+router.post('/login', login);
+
+// POST /api/auth/register
+router.post('/register', register);
 
 export default router;
