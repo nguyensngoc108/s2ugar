@@ -9,6 +9,10 @@ RUN npm install
 
 COPY . .
 
+# Build arguments for environment variables
+ARG REACT_APP_SERVER_URL=http://localhost:5000
+ENV REACT_APP_SERVER_URL=$REACT_APP_SERVER_URL
+
 # Build the React application
 RUN npm run build
 
