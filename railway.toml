@@ -1,3 +1,0 @@
-# Railway auto-detects Dockerfiles in subdirectories
-# server/Dockerfile → Server service
-# client/Dockerfile → Client service
