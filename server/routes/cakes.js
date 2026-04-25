@@ -1,40 +1,32 @@
 import express from 'express';
-import Cake from '../models/Cake.js';
+import { 
+  getSignatureCake, 
+  getAllCakes, 
+  getCakeById, 
+  createCake, 
+  updateCake, 
+  deleteCake 
+} from '../controllers/cakesController.js';
+import { verifyAdmin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Get signature cake
-router.get('/signature', async (req, res) => {
-  try {
-    const signatureCake = await Cake.findOne({ isSignature: true });
-    if (!signatureCake) {
-      return res.status(404).json({ message: 'No signature cake set' });
-    }
-    res.json(signatureCake);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+// GET /api/cakes/signature
+router.get('/signature', getSignatureCake);
 
-// Get all cakes
-router.get('/', async (req, res) => {
-  try {
-    const cakes = await Cake.find();
-    res.json(cakes);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+// GET /api/cakes
+router.get('/', getAllCakes);
 
-// Get single cake
-router.get('/:id', async (req, res) => {
-  try {
-    const cake = await Cake.findById(req.params.id);
-    if (!cake) return res.status(404).json({ message: 'Cake not found' });
-    res.json(cake);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
+// GET /api/cakes/:id
+router.get('/:id', getCakeById);
+
+// POST /api/cakes (Admin only)
+router.post('/', verifyAdmin, createCake);
+
+// PUT /api/cakes/:id (Admin only)
+router.put('/:id', verifyAdmin, updateCake);
+
+// DELETE /api/cakes/:id (Admin only)
+router.delete('/:id', verifyAdmin, deleteCake);
 
 export default router;
