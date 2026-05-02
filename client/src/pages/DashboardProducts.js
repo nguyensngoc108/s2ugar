@@ -1,33 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import api from '../services/httpServices';
+import ImageCropper from '../components/ImageCropper';
 
 const DashboardProducts = ({
   products,
   availableIngredients,
+  categories,
   loading,
   message,
   onMessage,
   onDataChange
 }) => {
   // ── List / Add-new state ──
-  const [showAddForm, setShowAddForm]       = useState(false);
-  const [newProduct, setNewProduct]         = useState({ name: '', description: '', price: '', category: 'Birthday_Cakes', image: '' });
+  const [showAddForm, setShowAddForm]         = useState(false);
+  const [newProduct, setNewProduct]           = useState({ name: '', description: '', price: '', category: '', image: '' });
   const [isAddSubmitting, setIsAddSubmitting] = useState(false);
-  const [addImageFile, setAddImageFile]     = useState(null);
+  const [addImageFile, setAddImageFile]       = useState(null);
   const [addImagePreview, setAddImagePreview] = useState(null);
   const [isUploadingAddImage, setIsUploadingAddImage] = useState(false);
-  const [searchTerm, setSearchTerm]         = useState('');
-  const [filterCategory, setFilterCategory] = useState('');
+  const [searchTerm, setSearchTerm]           = useState('');
+  const [filterCategory, setFilterCategory]   = useState('');
 
   // ── Manage-view state ──
   const [managingProduct, setManagingProduct] = useState(null);
-  const [cakeForm, setCakeForm]             = useState({});
-  const [cakeImageFile, setCakeImageFile]   = useState(null);
+  const [cakeForm, setCakeForm]               = useState({});
+  const [cakeImageFile, setCakeImageFile]     = useState(null);
   const [cakeImagePreview, setCakeImagePreview] = useState(null);
   const [isUploadingCakeImage, setIsUploadingCakeImage] = useState(false);
-  const [isSavingCake, setIsSavingCake]     = useState(false);
-  const [recipeRows, setRecipeRows]         = useState([]);
-  const [isSavingRecipe, setIsSavingRecipe] = useState(false);
+  const [isSavingCake, setIsSavingCake]       = useState(false);
+  const [recipeRows, setRecipeRows]           = useState([]);
+  const [isSavingRecipe, setIsSavingRecipe]   = useState(false);
+
+  // ── Image cropper state ──
+  const [cropperSrc, setCropperSrc]         = useState(null);
+  const [cropperFileName, setCropperFileName] = useState('');
+  const [cropperTarget, setCropperTarget]   = useState(null); // 'add' | 'manage'
 
   const filteredProducts = products.filter((p) => {
     const matchesSearch   = p.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -43,7 +50,7 @@ const DashboardProducts = ({
       name:        latest.name        || '',
       description: latest.description || '',
       price:       latest.price       || '',
-      category:    latest.category    || 'Birthday_Cakes',
+      category:    latest.category    || '',
       image:       latest.image       || ''
     });
     setCakeImageFile(null);
@@ -57,23 +64,49 @@ const DashboardProducts = ({
     })));
   }, [managingProduct?._id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Shared image helpers ──
-  const processImageFile = (file, setFile, setPreview) => {
+  // ── Category helper ──
+  const categoryOptions = (categories || []).map(cat => (
+    <option key={cat._id} value={cat.slug}>{cat.name}</option>
+  ));
+
+  // ── Image: open cropper ──
+  const openCropper = (file, target) => {
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
       onMessage('Invalid file type. Please upload JPEG, PNG, WebP, or GIF.');
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      onMessage('File size exceeds 5MB limit.');
+    if (file.size > 10 * 1024 * 1024) {
+      onMessage('File size exceeds 10MB limit.');
       return;
     }
-    setFile(file);
     const reader = new FileReader();
-    reader.onloadend = () => setPreview(reader.result);
+    reader.onloadend = () => {
+      setCropperSrc(reader.result);
+      setCropperFileName(file.name);
+      setCropperTarget(target);
+    };
     reader.readAsDataURL(file);
   };
 
+  const handleCropDone = (croppedFile) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (cropperTarget === 'add') {
+        setAddImageFile(croppedFile);
+        setAddImagePreview(reader.result);
+      } else {
+        setCakeImageFile(croppedFile);
+        setCakeImagePreview(reader.result);
+      }
+    };
+    reader.readAsDataURL(croppedFile);
+    setCropperSrc(null);
+  };
+
+  const handleCropCancel = () => setCropperSrc(null);
+
+  // ── Upload helper ──
   const uploadImageFile = async (file, productId, setUploading) => {
     if (!file) return null;
     try {
@@ -119,7 +152,7 @@ const DashboardProducts = ({
 
   const resetAddForm = () => {
     setShowAddForm(false);
-    setNewProduct({ name: '', description: '', price: '', category: 'Birthday_Cakes', image: '' });
+    setNewProduct({ name: '', description: '', price: '', category: '', image: '' });
     setAddImageFile(null);
     setAddImagePreview(null);
   };
@@ -213,12 +246,67 @@ const DashboardProducts = ({
     return isNaN(c) ? sum : sum + c;
   }, 0);
 
+  // ── Shared image upload UI ──
+  const renderImageUploader = (target, imageFile, imagePreview, existingUrl, disabled) => (
+    <div className="form-group">
+      <label>Product Image</label>
+      {existingUrl && !imageFile && (
+        <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <img src={existingUrl} alt="Current" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '2px solid #d1fae5' }} />
+          <span style={{ fontSize: '0.85rem', color: '#059669' }}>✓ Current image — select below to replace</span>
+        </div>
+      )}
+      <div
+        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+        onDrop={(e) => {
+          e.preventDefault(); e.stopPropagation();
+          const f = e.dataTransfer.files[0];
+          if (f) openCropper(f, target);
+        }}
+        style={{ border: '2px dashed #2563eb', borderRadius: 10, padding: '20px', textAlign: 'center', backgroundColor: '#f0f9ff', cursor: 'pointer' }}
+      >
+        <input
+          type="file" accept="image/*"
+          id={`${target}-image-input`}
+          style={{ display: 'none' }}
+          disabled={disabled}
+          onChange={(e) => { const f = e.target.files[0]; if (f) { openCropper(f, target); e.target.value = ''; } }}
+        />
+        <label htmlFor={`${target}-image-input`} style={{ cursor: 'pointer', display: 'block' }}>
+          <div style={{ fontSize: '2rem', marginBottom: 6 }}>📸</div>
+          <div style={{ fontWeight: 600, color: '#2563eb', fontSize: '0.9rem' }}>Click to upload or drag & drop</div>
+          <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>JPEG, PNG, WebP, GIF · Will be cropped to 800×800px</div>
+        </label>
+      </div>
+      {imageFile && (
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', backgroundColor: '#fef3c7', borderRadius: 8, border: '1px solid #fbbf24' }}>
+          <img src={imagePreview} alt="Preview" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6 }} />
+          <div style={{ flex: 1, fontSize: '0.85rem', color: '#92400e' }}>
+            <div>{imageFile.name}</div>
+            <div style={{ color: '#059669', fontWeight: 600, fontSize: '0.78rem' }}>✓ Cropped · 800×800px · {(imageFile.size / 1024).toFixed(0)} KB</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (target === 'add') { setAddImageFile(null); setAddImagePreview(null); }
+              else { setCakeImageFile(null); setCakeImagePreview(existingUrl || null); }
+            }}
+            style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem' }}
+          >✕</button>
+        </div>
+      )}
+    </div>
+  );
+
   // ─────────────────────────────────────────────────────────────
   // MANAGE VIEW
   // ─────────────────────────────────────────────────────────────
   if (managingProduct) {
     return (
       <div className="dashboard-section">
+        {cropperSrc && (
+          <ImageCropper src={cropperSrc} fileName={cropperFileName} onCrop={handleCropDone} onCancel={handleCropCancel} />
+        )}
 
         {/* Back header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28 }}>
@@ -260,51 +348,19 @@ const DashboardProducts = ({
             <div className="form-row">
               <div className="form-group">
                 <label>Category</label>
-                <select value={cakeForm.category || 'Birthday_Cakes'} onChange={(e) => setCakeForm({ ...cakeForm, category: e.target.value })} disabled={isSavingCake}>
-                  <option value="Birthday_Cakes">Birthday Cakes</option>
-                  <option value="Wedding_Cakes">Wedding Cakes</option>
-                  <option value="Anniversary_Cakes">Anniversary Cakes</option>
-                  <option value="Graduation_Cakes">Graduation Cakes</option>
-                  <option value="Custom_Cakes">Custom Cakes</option>
-                  <option value="Seasonal_Cakes">Seasonal Cakes</option>
+                <select value={cakeForm.category || ''} onChange={(e) => setCakeForm({ ...cakeForm, category: e.target.value })} disabled={isSavingCake}>
+                  <option value="">— No category —</option>
+                  {categoryOptions}
                 </select>
+                {(categories || []).length === 0 && (
+                  <div style={{ fontSize: '0.78rem', color: '#f59e0b', marginTop: 4 }}>
+                    No categories yet — create them in the Categories tab.
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Image */}
-            <div className="form-group">
-              <label>Product Image</label>
-              {cakeForm.image && !cakeImageFile && (
-                <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <img src={cakeForm.image} alt="Current" style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 8, border: '2px solid #d1fae5' }} />
-                  <span style={{ fontSize: '0.85rem', color: '#059669' }}>✓ Current image — select below to replace</span>
-                </div>
-              )}
-              <div
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f) processImageFile(f, setCakeImageFile, setCakeImagePreview); }}
-                style={{ border: '2px dashed #2563eb', borderRadius: 10, padding: '20px', textAlign: 'center', backgroundColor: '#f0f9ff', cursor: 'pointer' }}
-              >
-                <input type="file" accept="image/*" id="cake-image-input" style={{ display: 'none' }} disabled={isSavingCake}
-                  onChange={(e) => { const f = e.target.files[0]; if (f) processImageFile(f, setCakeImageFile, setCakeImagePreview); }} />
-                <label htmlFor="cake-image-input" style={{ cursor: 'pointer', display: 'block' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: 6 }}>📸</div>
-                  <div style={{ fontWeight: 600, color: '#2563eb', fontSize: '0.9rem' }}>Click to upload or drag & drop</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>JPEG, PNG, WebP, GIF (Max 5MB)</div>
-                </label>
-              </div>
-              {cakeImageFile && (
-                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', backgroundColor: '#fef3c7', borderRadius: 8, border: '1px solid #fbbf24' }}>
-                  <img src={cakeImagePreview} alt="Preview" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6 }} />
-                  <div style={{ flex: 1, fontSize: '0.85rem', color: '#92400e' }}>
-                    <div>{cakeImageFile.name}</div>
-                    <div>{(cakeImageFile.size / 1024 / 1024).toFixed(2)} MB</div>
-                  </div>
-                  <button type="button" onClick={() => { setCakeImageFile(null); setCakeImagePreview(cakeForm.image || null); }}
-                    style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
-                </div>
-              )}
-            </div>
+            {renderImageUploader('manage', cakeImageFile, cakeImagePreview, cakeForm.image, isSavingCake)}
 
             <div className="form-actions">
               <button type="submit" className="dashboard-btn-primary" disabled={isSavingCake || isUploadingCakeImage}>
@@ -411,6 +467,9 @@ const DashboardProducts = ({
   // ─────────────────────────────────────────────────────────────
   return (
     <div className="dashboard-section">
+      {cropperSrc && (
+        <ImageCropper src={cropperSrc} fileName={cropperFileName} onCrop={handleCropDone} onCancel={handleCropCancel} />
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
@@ -450,42 +509,17 @@ const DashboardProducts = ({
               <div className="form-group">
                 <label>Category</label>
                 <select value={newProduct.category} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })} disabled={isAddSubmitting}>
-                  <option value="Birthday_Cakes">Birthday Cakes</option>
-                  <option value="Wedding_Cakes">Wedding Cakes</option>
-                  <option value="Anniversary_Cakes">Anniversary Cakes</option>
-                  <option value="Graduation_Cakes">Graduation Cakes</option>
-                  <option value="Custom_Cakes">Custom Cakes</option>
-                  <option value="Seasonal_Cakes">Seasonal Cakes</option>
+                  <option value="">— No category —</option>
+                  {categoryOptions}
                 </select>
-              </div>
-            </div>
-            <div className="form-group">
-              <label>Product Image *</label>
-              <div
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                onDrop={(e) => { e.preventDefault(); e.stopPropagation(); const f = e.dataTransfer.files[0]; if (f) processImageFile(f, setAddImageFile, setAddImagePreview); }}
-                style={{ border: '2px dashed #2563eb', borderRadius: 10, padding: '24px', textAlign: 'center', backgroundColor: '#f0f9ff', cursor: 'pointer' }}
-              >
-                <input type="file" accept="image/*" id="add-image-input" style={{ display: 'none' }} disabled={isAddSubmitting}
-                  onChange={(e) => { const f = e.target.files[0]; if (f) processImageFile(f, setAddImageFile, setAddImagePreview); }} />
-                <label htmlFor="add-image-input" style={{ cursor: 'pointer', display: 'block' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: 6 }}>📸</div>
-                  <div style={{ fontWeight: 600, color: '#2563eb', fontSize: '0.9rem' }}>Click to upload or drag & drop</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.8rem' }}>JPEG, PNG, WebP, GIF (Max 5MB)</div>
-                </label>
-              </div>
-              {addImageFile && (
-                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', backgroundColor: '#fef3c7', borderRadius: 8, border: '1px solid #fbbf24' }}>
-                  <img src={addImagePreview} alt="Preview" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6 }} />
-                  <div style={{ flex: 1, fontSize: '0.85rem', color: '#92400e' }}>
-                    <div>{addImageFile.name}</div>
-                    <div>{(addImageFile.size / 1024 / 1024).toFixed(2)} MB</div>
+                {(categories || []).length === 0 && (
+                  <div style={{ fontSize: '0.78rem', color: '#f59e0b', marginTop: 4 }}>
+                    No categories yet — create them in the Categories tab first.
                   </div>
-                  <button type="button" onClick={() => { setAddImageFile(null); setAddImagePreview(null); }}
-                    style={{ background: '#dc2626', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
+            {renderImageUploader('add', addImageFile, addImagePreview, null, isAddSubmitting)}
             <div className="form-actions">
               <button type="submit" className="dashboard-btn-primary"
                 disabled={isAddSubmitting || isUploadingAddImage || !newProduct.name || !newProduct.price || !newProduct.description || !addImageFile}>
@@ -503,12 +537,9 @@ const DashboardProducts = ({
           value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         <select className="table-filter-select" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
           <option value="">All Categories</option>
-          <option value="Birthday_Cakes">Birthday Cakes</option>
-          <option value="Wedding_Cakes">Wedding Cakes</option>
-          <option value="Anniversary_Cakes">Anniversary Cakes</option>
-          <option value="Graduation_Cakes">Graduation Cakes</option>
-          <option value="Custom_Cakes">Custom Cakes</option>
-          <option value="Seasonal_Cakes">Seasonal Cakes</option>
+          {(categories || []).map(cat => (
+            <option key={cat._id} value={cat.slug}>{cat.name}</option>
+          ))}
         </select>
       </div>
 
@@ -538,6 +569,7 @@ const DashboardProducts = ({
                   const c = (parseFloat(ri.totalCost) / parseFloat(ri.measure)) * parseFloat(ri.each);
                   return isNaN(c) ? sum : sum + c;
                 }, 0);
+                const cat = (categories || []).find(c => c.slug === product.category);
                 return (
                   <tr key={product._id}>
                     <td>
@@ -549,7 +581,19 @@ const DashboardProducts = ({
                         <span className="td-primary">{product.name}</span>
                       </div>
                     </td>
-                    <td><span className="badge badge-blue">{product.category?.replace(/_/g, ' ')}</span></td>
+                    <td>
+                      {cat ? (
+                        <span style={{
+                          display: 'inline-block', padding: '3px 12px', borderRadius: 20,
+                          fontSize: '0.78rem', fontWeight: 600, color: '#fff',
+                          background: cat.color || '#6366f1',
+                        }}>{cat.name}</span>
+                      ) : product.category ? (
+                        <span className="badge badge-blue">{product.category.replace(/_/g, ' ')}</span>
+                      ) : (
+                        <span style={{ color: '#9ca3af', fontSize: '0.85rem' }}>—</span>
+                      )}
+                    </td>
                     <td className="td-primary">${parseFloat(product.price).toFixed(2)}</td>
                     <td className="td-muted">{recipeCost > 0 ? `$${recipeCost.toFixed(2)}` : '—'}</td>
                     <td style={{ textAlign: 'center' }}>

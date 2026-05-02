@@ -5,16 +5,18 @@ import { useDashboardData } from '../hooks/useDashboardData';
 import DashboardLogin from './DashboardLogin';
 import DashboardOverview from './DashboardOverview';
 import DashboardProducts from './DashboardProducts';
+import DashboardCategories from './DashboardCategories';
 import DashboardIngredients from './DashboardIngredients';
 import DashboardOrders from './DashboardOrders';
 import DashboardPackaging from './DashboardPackaging';
 
 const NAV = [
-  { key: 'overview',     label: 'Overview',    icon: '📊' },
-  { key: 'products',     label: 'Products',    icon: '🍰' },
-  { key: 'ingredients',  label: 'Ingredients', icon: '🥘' },
-  { key: 'packaging',    label: 'Packaging',   icon: '📦' },
-  { key: 'orders',       label: 'Orders',      icon: '📋' },
+  { key: 'overview',    label: 'Overview',    icon: '📊' },
+  { key: 'products',    label: 'Products',    icon: '🍰' },
+  { key: 'categories',  label: 'Categories',  icon: '🏷️' },
+  { key: 'ingredients', label: 'Ingredients', icon: '🥘' },
+  { key: 'packaging',   label: 'Packaging',   icon: '📦' },
+  { key: 'orders',      label: 'Orders',      icon: '📋' },
 ];
 
 const formatDate = () =>
@@ -131,8 +133,18 @@ const DashboardPage = () => {
             <DashboardProducts
               products={dashboardData.products}
               availableIngredients={dashboardData.availableIngredients}
+              categories={dashboardData.categories}
               loading={dashboardData.loading}
               message={dashboardData.message}
+              onMessage={dashboardData.setMessage}
+              onDataChange={dashboardData.fetchDashboardData}
+            />
+          )}
+
+          {activeTab === 'categories' && (
+            <DashboardCategories
+              categories={dashboardData.categories}
+              loading={dashboardData.loading}
               onMessage={dashboardData.setMessage}
               onDataChange={dashboardData.fetchDashboardData}
             />
