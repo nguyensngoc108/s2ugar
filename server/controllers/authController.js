@@ -178,7 +178,7 @@ export const registerUser = async (req, res) => {
     }
 
     const address = `${street}, ${city}, ${postalCode}`;
-    const details = `Dietary Restrictions: ${dietaryRestrictions || "None"}`;
+    const details = { notes: dietaryRestrictions || "" };
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
